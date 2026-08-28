@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Synta – Understand What You Sign</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0F172A;
+      --bg-card: #1E293B;
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --accent-indigo: #6366F1;
+      --accent-emerald: #34D399;
+      --border-color: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      line-height: 1.6;
+      scroll-behavior: smooth;
+    }
+    header {
+      padding: 2rem 4rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .logo { font-size: 1.5rem; font-weight: 700; }
+    .logo span { color: var(--accent-indigo); }
+    nav a {
+      margin-left: 2rem;
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    nav a:hover { color: var(--text-primary); }
+    section.hero {
+      padding: 6rem 4rem;
+      text-align: center;
+      background: linear-gradient(to right, #1E293B, #0F172A);
+    }
+    .hero h1 {
+      font-size: 2.8rem;
+      margin-bottom: 1rem;
+    }
+    .hero p.subtitle {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto 2rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.8rem 2rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--accent-indigo);
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary:hover {
+      background: #7b80f0;
+      transform: scale(1.05);
+    }
+    section.features {
+      padding: 4rem 4rem;
+      background: var(--bg-card);
+    }
+    .features h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 3rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .feature-card {
+      background: #0F172A;
+      border: 1px solid var(--border-color);
+      border-radius: 1rem;
+      padding: 2rem;
+      text-align: center;
+      transition: box-shadow 0.3s ease;
+    }
+    .feature-card:hover {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+    .feature-card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 0.8rem;
+    }
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+    footer {
+      padding: 2rem 4rem;
+      text-align: center;
+      border-top: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🛡️ <span>Synta</span></div>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+    <a href="#about">About</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Understand What You Sign</h1>
+  <p class="subtitle">
+    Synta intercepts Ethereum transactions and gives you crystal-clear insights before you approve them — protecting your assets from hidden risks.
+  </p>
+  <button class="btn btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})">
+    Add to Chrome
+  </button>
+</section>
+
+<section class="features" id="features">
+  <h2>How Synta Protects You</h2>
+  <div class="grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <h3>Real-Time Analysis</h3>
+      <p>Every transaction is scanned instantly — decoding contract calls, identifying risky actions like unlimited approvals, and highlighting hidden dangers.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚠️</div>
+      <h3>Clear Warnings</h3>
+      <p>Get plain-language alerts about threats, scams, and suspicious activity — no crypto jargon, no guesswork.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✅</div>
+      <h3>User Control</h3>
+      <p>Never sign blindly again. Approve or reject each interaction with confidence through an intuitive popup interface.</p>
+    </div>
+  </div>
+</section>
+
+<section id="install" style="padding: 4rem; text-align: center;">
+  <h2 style="font-size: 2rem; margin-bottom: 1rem;">Join Thousands of Secure Signers</h2>
+  <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto 2rem;">
+    Add Synta to your browser in seconds and take control of every transaction.
+  </p>
+  <button class="btn btn-primary" style="font-size: 1rem;">
+    Get Synta for Chrome
+  </button>
+</section>
+
+<footer>
+  © 2025 Synta — Understand What You Sign.
+</footer>
+
+</body>
+</html>

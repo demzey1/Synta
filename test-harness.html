@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Synta Test Harness</title>
+</head>
+<body>
+    <h1>Test Page for Synta Extension</h1>
+    <button onclick="sendTransaction()">Send ETH Transaction</button>
+    <button onclick="signMessage()">Sign Personal Message</button>
+    <button onclick="approveToken()">Approve Token Spending</button>
+    
+    <script>
+        async function sendTransaction() {
+            if (window.ethereum) {
+                try {
+                    const tx = await window.ethereum.request({
+                        method: 'eth_sendTransaction',
+                        params: [{
+                            from: '0x1234...',
+                            to: '0x0000000000000000000000000000000000000000',
+                            value: '0x0de0b6b3a7640000', // 1 ETH
+                        }],
+                    });
+                    console.log('Transaction sent:', tx);
+                } catch (e) {
+                    console.log('Transaction rejected:', e.message);
+                }
+            } else {
+                alert('MetaMask not detected');
+            }
+        }
+
+        async function signMessage() {
+            if (window.ethereum) {
+                try {
+                    const msg = 'Hello world';
+                    const signature = await window.ethereum.request({
+                        method: 'personal_sign',
+                        params: [msg, '0x1234...'],
+                    });
+                    console.log('Signed:', signature);
+                } catch (e) {
+                    console.log('Signature rejected:', e.message);
+                }
+            }
+        }
+
+        async function approveToken() {
+            if (window.ethereum) {
+                try {
+                    const tx = await window.ethereum.request({
+                        method: 'eth_sendTransaction',
+                        params: [{
+                            to: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+                            data: '0x095ea7b3' + '000000000000000000000000' + 'a3b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2' + 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+                        }],
+                    });
+                    console.log('Approval sent:', tx);
+                } catch (e) {
+                    console.log('Approval rejected:', e.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
