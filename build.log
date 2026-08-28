@@ -1,11 +1,11 @@
 [36mvite v8.2.2 [32mbuilding client environment for production...[36m[39m
 transforming...
-✓ 166 modules transformed.
+✓ 167 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                 0.27 kB │ gzip:  0.21 kB
 dist/assets/contentScript.js    1.32 kB │ gzip:  0.75 kB
 dist/assets/background.js      70.65 kB │ gzip: 22.48 kB
-dist/assets/popup.js          194.71 kB │ gzip: 61.34 kB
+dist/assets/popup.js          194.82 kB │ gzip: 61.40 kB
 
-[32m✓ built in 346ms[39m
+[32m✓ built in 388ms[39m

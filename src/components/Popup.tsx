@@ -4,45 +4,39 @@
  */
 
 import React, { useState, useEffect } from 'react';
-
-interface Transaction {
-  action: string;
-  spender?: string;
-  amount?: string;
-  token?: string;
-  contract: string;
-  chainId: number;
-  methodId?: string;
-  risk?: {
-    level: 'safe' | 'warning' | 'danger';
-    reasons?: string[];
-  };
-}
+import { DecodedTransaction, RiskAssessment } from '../services/transactionDecoder';
 
 interface PopupProps {
-  transaction: Transaction | null;
+  transaction: DecodedTransaction | null;
+  riskAssessment: RiskAssessment | null;
   onDecision: (approved: boolean) => void;
 }
 
-const Popup: React.FC<PopupProps> = ({ transaction, onDecision }) => {
-  const [txData, setTxData] = useState<Transaction | null>(transaction);
-  
+const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }) => {
+  const [txData, setTxData] = useState<DecodedTransaction | null>(transaction);
+  const [riskData, setRiskData] = useState<RiskAssessment | null>(riskAssessment);
+  const [isLoading, setIsLoading] = useState<boolean>(!transaction && !riskAssessment);
+
   useEffect(() => {
     // Listen for messages from background script
     const listener = (msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
       if (msg.type === 'ANALYSIS_UPDATE') {
         setTxData(msg.transaction);
+        setRiskData(msg.riskAssessment);
+        setIsLoading(false);
         sendResponse({ received: true });
         return true;
       }
     };
-  
+
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
   const handleDecision = (approved: boolean) => {
-    onDecision(approved);
+    if (onDecision) {
+      onDecision(approved);
+    }
     chrome.runtime.sendMessage({ type: 'USER_DECISION', approved });
     window.close();
   };
@@ -56,7 +50,8 @@ const Popup: React.FC<PopupProps> = ({ transaction, onDecision }) => {
     }
   };
 
-  const riskStyle = txData?.risk ? getRiskColors(txData.risk.level) : getRiskColors();
+  const risk = riskData || txData?.risk;
+  const riskStyle = risk ? getRiskColors(risk.level) : getRiskColors();
 
   return (
     <div className="w-80 min-h-[300px] bg-slate-900 text-slate-100 p-4 font-sans">
@@ -72,7 +67,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, onDecision }) => {
       </div>
 
       {/* Loading State */}
-      {!txData && (
+      {isLoading && (
         <div className="py-8 text-center">
           <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto mb-3"></div>
           <p className="text-slate-300">Analyzing transaction...</p>
@@ -80,14 +75,14 @@ const Popup: React.FC<PopupProps> = ({ transaction, onDecision }) => {
       )}
 
       {/* Transaction Details */}
-      {txData && (
+      {!isLoading && txData && (
         <div className="space-y-4">
           {/* Risk Level Badge */}
           <div className={`p-3 rounded-lg ${riskStyle.bg} border ${riskStyle.border}`}>
             <div className="flex items-center gap-2">
               <span className="text-lg">{riskStyle.icon}</span>
               <span className={`font-medium ${riskStyle.text}`}>
-                {txData.risk?.level?.toUpperCase() || 'UNKNOWN'} RISK
+                {(risk?.level || 'UNKNOWN').toUpperCase()} RISK
               </span>
             </div>
           </div>
@@ -126,11 +121,11 @@ const Popup: React.FC<PopupProps> = ({ transaction, onDecision }) => {
           )}
 
           {/* Risk Reasons */}
-          {txData.risk?.reasons && txData.risk.reasons.length > 0 && (
+          {risk?.reasons && risk.reasons.length > 0 && (
             <div>
               <span className="text-xs text-slate-500 uppercase tracking-wider">Security Concerns</span>
               <ul className="mt-2 space-y-1">
-                {txData.risk.reasons.map((reason, i) => (
+                {risk.reasons.map((reason, i) => (
                   <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
                     <span className="text-red-400 mt-0.5">•</span>
                     <span>{reason}</span>
