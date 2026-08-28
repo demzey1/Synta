@@ -2,11 +2,11 @@
   "manifest_version": 3,
   "name": "Synta — Transaction Safety",
   "description": "Intercepts Ethereum transactions and shows clear warnings before signing.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "icons": {
-    "16": "icons/synta-icon-16.png",
-    "48": "icons/synta-icon-48.png",
-    "128": "icons/synta-icon-128.png"
+    "16": "icons/synta-icon-16.svg",
+    "48": "icons/synta-icon-48.svg",
+    "128": "icons/synta-icon-128.svg"
   },
   "action": {
     "default_popup": "index.html",
@@ -26,9 +26,18 @@
     "storage",
     "activeTab",
     "scripting",
-    "identity"
+    "notifications"
   ],
   "host_permissions": [
     "https://*/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }

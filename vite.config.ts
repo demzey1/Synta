@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
 // Chrome extension build with multiple entry points and stable filenames
 export default defineConfig({
@@ -7,14 +8,6 @@ export default defineConfig({
   root: '.',
   base: './',
   publicDir: 'public',
-  css: {
-    preprocessorOptions: {
-      css: {
-        // Ensure Tailwind styles are included
-        modules: false
-      }
-    }
-  },
   build: {
     rollupOptions: {
       input: {
@@ -29,13 +22,13 @@ export default defineConfig({
         assetFileNames: ({ name }) => {
           if (name && name.endsWith('.html')) return '[name].[ext]';
           return 'assets/[name].[ext]';
-        }
-      }
+        },
+      },
     },
     outDir: 'dist',
-    emptyOutDir: true,
+    emptyOutDir: false,
     sourcemap: false,
     minify: true,
     target: ['chrome100'],
-  }
+  },
 });

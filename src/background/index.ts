@@ -161,9 +161,10 @@ async function notifyUI(approval: PendingApproval): Promise<void> {
     // Fallback: show browser notification
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/synta-icon-48.png',
+      iconUrl: 'icons/synta-icon-48.svg',
       title: 'Synta - Action Required',
-      message: `New transaction requires your review\nAction: ${approval.decodedTx?.action || 'Unknown'}`,
+      message: `New transaction requires your review
+Action: ${approval.decodedTx?.action || 'Unknown'}`,
     });
   }
 }
@@ -310,23 +311,37 @@ chrome.runtime.onMessage.addListener((
   sendResponse: (response: unknown) => void
 ): boolean => {
   switch (message.type) {
-    case 'INTERCEPT_REQUEST':
+    case 'INTERCEPT_REQUEST': {
+      // Handle the intercept request asynchronously
       handleInterceptRequest(message, sender)
-        .then(result => sendResponse({ success: true, requestId: result }))
-        .catch(error => sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }));
+        .then((requestId) => {
+          // Notify UI, but respond to content script immediately with success
+          void notifyUI(pendingApprovals.get(requestId)!).catch(e => {
+            console.warn('[Synta] notifyUI error:', e);
+          });
+          sendResponse({ success: true, requestId });
+        })
+        .catch((error) => {
+          console.error('[Synta] Intercept request failed:', error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        });
       return true; // Keep message channel open for async response
+    }
 
-    case 'USER_DECISION':
+    case 'USER_DECISION': {
       handleUserDecision(message)
         .then(() => sendResponse({ success: true }))
-        .catch(error => sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }));
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        );
       return true;
+    }
 
     case 'PING':
       sendResponse({ type: 'PONG', timestamp: Date.now() });
