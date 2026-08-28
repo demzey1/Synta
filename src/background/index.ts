@@ -1,34 +1,21 @@
 /**
  * Synta Background Script
- *
- * Central orchestrator that bridges content scripts, popup UI, and web pages.
- *
- * Message Flow:
- * 1. Content Script → sends INTERCEPT_REQUEST with raw Ethereum call data
- * 2. Background → decodes transaction, analyzes risk, updates popup
- * 3. Popup → sends user decision (confirm/reject) back to background
- * 4. Background → resolves the original promise in the webpage
- *
- * Uses chrome.runtime.onMessage for cross-context communication
+ * Bridges content scripts, popup UI, and web pages.
+ * 
+ * Flow:
+ * 1. Content Script → INTERCEPT_REQUEST with raw eth call
+ * 2. Background → decodes, analyzes risk, opens popup, sends ANALYSIS_UPDATE
+ * 3. Popup → USER_DECISION → Background
+ * 4. Background → sends INTERCEPT_RESPONSE back to content script
+ * 5. Content script resolves/rejects the original promise
  */
-
-// ============================================================================
-// Imports
-// ============================================================================
 
 import { decodeTransaction, DecodedTransaction } from '../services/transactionDecoder';
 import { analyzeTransaction, RiskAssessment } from '../services/riskAnalyzer';
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/**
- * Message from content script requesting security screening
- * Sent when user initiates a transaction/signing request
- */
 interface InterceptRequestMessage {
   type: 'INTERCEPT_REQUEST';
+  messageId: string;
   method: string;
   params: unknown[] | unknown;
   origin: string;
@@ -36,260 +23,163 @@ interface InterceptRequestMessage {
   timestamp: number;
 }
 
-/**
- * Response sent back to content script after user decision
- * Resolves/rejects the intercepted promise in the webpage
- */
-interface InterceptResponseMessage {
-  type: 'INTERCEPT_RESPONSE';
-  approved: boolean;
-  reason?: string;
-  error?: string;
-}
-
-/**
- * Message from popup when user makes a decision
- */
 interface UserDecisionMessage {
   type: 'USER_DECISION';
+  messageId: string;
   approved: boolean;
   reason?: string;
 }
 
-/**
- * Message to update popup with analysis results
- */
 interface PopupUpdateMessage {
   type: 'ANALYSIS_UPDATE';
-  transaction: DecodedTransaction & {
-    risk?: RiskAssessment;
-  };
+  messageId: string;
+  transaction: DecodedTransaction;
   riskAssessment: RiskAssessment;
-  request: InterceptRequestMessage;
+  method: string;
+  origin: string;
 }
 
-/**
- * Pending transaction awaiting user approval
- * Tracks state between content script request and popup response
- */
 interface PendingApproval {
   requestId: string;
+  messageId: string;
   request: InterceptRequestMessage;
   senderTabId: number;
   decodedTx?: DecodedTransaction;
   riskAssessment?: RiskAssessment;
-  port?: chrome.runtime.Port;
 }
 
-/**
- * Complete message union type
- */
-type BackgroundMessage =
-  | InterceptRequestMessage
-  | UserDecisionMessage
-  | { type: 'PING' }
-  | { type: 'POPUP_READY' };
+const pendingApprovals = new Map<string, PendingApproval>();
 
-// ============================================================================
-// Pending Approval Store
-// ============================================================================
-
-/**
- * In-memory store of pending approvals
- * In a production system, this might use chrome.storage for persistence
- */
-const pendingApprovals: Map<string, PendingApproval> = new Map();
-
-/**
- * Generates a unique ID for each approval request
- */
 function generateRequestId(): string {
-  return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Gets the currently active tab ID in the focused window
- */
-function getActiveTabId(): Promise<number | undefined> {
+async function sendMessageToTab(tabId: number, message: any): Promise<void> {
   return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      resolve(tabs[0]?.id);
-    });
-  });
-}
-
-/**
- * Sends a message to the active tab (content script)
- */
-function sendMessageToTab(tabId: number, message: Record<string, unknown>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, message, () => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(undefined);
-      }
+      // Don't reject on error - tab might be closed
+      resolve();
     });
   });
 }
 
-/**
- * Notifies the popup UI about a new transaction requiring approval
- * Falls back to creating a browser notification if popup isn't open
- */
-async function notifyUI(approval: PendingApproval): Promise<void> {
-  const updateMessage: PopupUpdateMessage = {
-    type: 'ANALYSIS_UPDATE',
-    transaction: {
-      ...approval.decodedTx!,
-      risk: approval.riskAssessment
-    },
-    riskAssessment: approval.riskAssessment!,
-    request: approval.request,
-  };
-
-  try {
-    // Send to all extension contexts (popup, if open)
-    await chrome.runtime.sendMessage(updateMessage);
-    console.log('[Synta] Analysis update sent to UI');
-  } catch (error) {
-    console.warn('[Synta] Failed to notify UI:', error);
-    // Fallback: show browser notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/synta-icon-48.svg',
-      title: 'Synta - Action Required',
-      message: `New transaction requires your review
-Action: ${approval.decodedTx?.action || 'Unknown'}`,
-    });
-  }
-}
-
-// ============================================================================
-// Core Message Handlers
-// ============================================================================
-
-/**
- * Handles a transaction interception request from the content script
- * Full flow: decode → analyze → notify popup → store pending approval
- *
- * @param message - The intercepted request message
- * @param sender - Message sender info (includes tab ID)
- * @returns Request ID for tracking
- */
 async function handleInterceptRequest(
   message: InterceptRequestMessage,
-  sender: chrome.runtime.MessageSender
-): Promise<string> {
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (response: any) => void
+): Promise<void> {
   const requestId = generateRequestId();
   const senderTabId = sender.tab?.id || 0;
 
-  console.log('[Synta] Intercepted request:', {
-    method: message.method,
-    origin: message.origin,
-    requestId
-  });
+  console.log('[Synta] Intercepted:', message.method, 'from', message.origin, 'msgId:', message.messageId);
 
   try {
-    // Step 1: Decode the transaction
     const decodedTx = decodeRequest(message);
-
-    // Step 2: Analyze risk (await the async analysis)
     const riskAssessment = await analyzeTransaction(decodedTx);
 
-    // Step 3: Store pending approval
     const approval: PendingApproval = {
       requestId,
+      messageId: message.messageId,
       request: message,
       senderTabId,
       decodedTx,
       riskAssessment,
     };
-    pendingApprovals.set(requestId, approval);
+    pendingApprovals.set(message.messageId, approval);
 
-    // Step 4: Notify UI (popup or notification)
+    // Update popup if open, otherwise open it
     await notifyUI(approval);
 
-    console.log('[Synta] Transaction sent to UI for approval:', requestId);
-    return requestId;
-
+    // Respond to content script immediately that we received it
+    sendResponse({ received: true });
   } catch (error) {
-    console.error('[Synta] Failed to process intercepted request:', error);
-
-    // Clean up and notify UI of error
-    pendingApprovals.delete(requestId);
-
-    // Send rejection back to content script
-    if (senderTabId) {
-      await sendMessageToTab(senderTabId, {
-        type: 'INTERCEPT_RESPONSE',
-        approved: false,
-        error: error instanceof Error ? error.message : 'Analysis failed',
-        requestId,
-      });
-    }
-
-    throw error;
+    console.error('[Synta] Intercept error:', error);
+    pendingApprovals.delete(message.messageId);
+    sendResponse({
+      received: true,
+      error: error instanceof Error ? error.message : 'Analysis failed',
+    });
+    // Auto-reject on error
+    await sendMessageToTab(senderTabId, {
+      type: 'INTERCEPT_RESPONSE',
+      messageId: message.messageId,
+      approved: false,
+      reason: 'Analysis failed - rejecting for safety',
+    });
   }
 }
 
-/**
- * Converts an intercepted message into a DecodedTransaction object
- * compatible with the transactionDecoder.ts interface
- */
 function decodeRequest(message: InterceptRequestMessage): DecodedTransaction {
   const defaultChainId = 1;
 
   if (message.method === 'eth_sendTransaction') {
-    const params = message.params as unknown[] | unknown;
-    const paramArray = Array.isArray(params) ? params : [params];
-
-    if (paramArray.length > 0) {
-      const txParams = paramArray[0] as { to?: string; data?: string; value?: string };
+    const paramsArray = Array.isArray(message.params) ? message.params : [message.params];
+    if (paramsArray.length > 0) {
+      const txParams = paramsArray[0] as { to?: string; data?: string; value?: string };
       const toAddress = txParams?.to || '';
       const data = txParams?.data || '0x';
       const value = txParams?.value || '0';
-
       return decodeTransaction({ to: toAddress, data, value }, defaultChainId);
     }
   }
 
-  // For personal_sign and eth_signTypedData_v4
   const paramsArray = Array.isArray(message.params) ? message.params : [];
   const toAddress = typeof paramsArray[0] === 'string' ? paramsArray[0] : '';
 
   return {
-    action: message.method === 'personal_sign' ? 'Sign personal message'
-           : message.method === 'eth_signTypedData_v4' ? 'Sign typed data (EIP-712)'
-           : `Unknown method: ${message.method}`,
+    action: message.method === 'personal_sign'
+      ? 'Sign personal message'
+      : message.method === 'eth_signTypedData_v4'
+      ? 'Sign typed data (EIP-712)'
+      : `Unknown method: ${message.method}`,
     contract: toAddress,
     chainId: defaultChainId,
   };
 }
 
-/**
- * Handles user decision from popup (confirm/reject)
- */
-async function handleUserDecision(message: UserDecisionMessage): Promise<void> {
-  // Find the pending approval with matching criteria
-  // In MVP, we'll use the most recent one
-  const pending = Array.from(pendingApprovals.values()).pop();
+async function notifyUI(approval: PendingApproval): Promise<void> {
+  const updateMessage: PopupUpdateMessage = {
+    type: 'ANALYSIS_UPDATE',
+    messageId: approval.messageId,
+    transaction: approval.decodedTx!,
+    riskAssessment: approval.riskAssessment!,
+    method: approval.request.method,
+    origin: approval.request.origin,
+  };
 
+  try {
+    // Try to send to popup if it's open
+    await chrome.runtime.sendMessage(updateMessage);
+    console.log('[Synta] Analysis sent to popup');
+  } catch {
+    // Popup not open - create notification and open popup
+    console.log('[Synta] Popup not open, creating notification');
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/synta-icon-48.svg',
+      title: 'Synta - Action Required',
+      message: `New transaction from ${approval.request.origin || 'unknown site'}\n${approval.decodedTx?.action || 'Unknown action'}`,
+    });
+    
+    // Open the popup
+    chrome.action.openPopup?.();
+  }
+}
+
+async function handleUserDecision(message: UserDecisionMessage): Promise<void> {
+  const pending = pendingApprovals.get(message.messageId);
+  
   if (!pending) {
-    console.warn('[Synta] No pending approval found for user decision');
+    console.warn('[Synta] No pending approval for decision:', message.messageId);
     return;
   }
 
-  const { requestId, senderTabId } = pending;
-  pendingApprovals.delete(requestId);
+  const { senderTabId } = pending;
+  pendingApprovals.delete(message.messageId);
 
-  // Send response back to content script
-  const response: InterceptResponseMessage = {
-    type: 'INTERCEPT_RESPONSE',
+  const response = {
+    type: 'INTERCEPT_RESPONSE' as const,
+    messageId: message.messageId,
     approved: message.approved,
     reason: message.reason,
   };
@@ -298,74 +188,45 @@ async function handleUserDecision(message: UserDecisionMessage): Promise<void> {
     await sendMessageToTab(senderTabId, response);
   }
 
-  console.log('[Synta] User decision processed:', message.approved ? 'approved' : 'rejected');
+  console.log('[Synta] User decision:', message.approved ? '✅ approved' : '❌ rejected');
 }
 
-// ============================================================================
-// Message Listener Setup
-// ============================================================================
+// ─── Message Listener ──────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((
-  message: BackgroundMessage,
-  sender: chrome.runtime.MessageSender,
-  sendResponse: (response: unknown) => void
+  message,
+  sender,
+  sendResponse
 ): boolean => {
   switch (message.type) {
-    case 'INTERCEPT_REQUEST': {
-      // Handle the intercept request asynchronously
-      handleInterceptRequest(message, sender)
-        .then((requestId) => {
-          // Notify UI, but respond to content script immediately with success
-          void notifyUI(pendingApprovals.get(requestId)!).catch(e => {
-            console.warn('[Synta] notifyUI error:', e);
-          });
-          sendResponse({ success: true, requestId });
-        })
-        .catch((error) => {
-          console.error('[Synta] Intercept request failed:', error);
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-        });
-      return true; // Keep message channel open for async response
-    }
+    case 'INTERCEPT_REQUEST':
+      handleInterceptRequest(message, sender, sendResponse);
+      return true;
 
-    case 'USER_DECISION': {
+    case 'USER_DECISION':
       handleUserDecision(message)
         .then(() => sendResponse({ success: true }))
-        .catch((error) =>
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
-        );
+        .catch((error) => sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }));
       return true;
-    }
-
-    case 'PING':
-      sendResponse({ type: 'PONG', timestamp: Date.now() });
-      return false;
 
     case 'POPUP_READY':
-      sendResponse({ type: 'PONG', timestamp: Date.now() });
-      return false;
+      console.log('[Synta] Popup is ready');
+      break;
 
     default:
-      console.warn('[Synta] Unknown message type:', message);
-      sendResponse({ success: false, error: 'Unknown message type' });
-      return false;
+      break;
   }
+
+  return false;
 });
 
-// Suppress unused var warnings
-void generateRequestId;
-void getActiveTabId;
+// Keep service worker alive
+chrome.runtime.onStartup?.addListener(() => {
+  console.log('[Synta] Service worker started');
+});
 
-// Export for testing (if needed)
-export {
-  pendingApprovals,
-  generateRequestId,
-  handleInterceptRequest,
-  handleUserDecision,
-};
+// Export for testing
+export { pendingApprovals, generateRequestId, handleInterceptRequest, handleUserDecision };

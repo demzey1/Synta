@@ -1,20 +1,6 @@
 /**
- * Synta Popup Component — Enhanced UI
- *
- * Visual improvements:
- * - 480px-wide canvas (per viewport config)
- * - Animated gradient shield header
- * - Risk progress ring (SVG) with percentage
- * - Color-coded threat badges
- * - Action icon + details card
- * - Address rows with copy buttons
- * - Security concerns list
- * - Audit & chain info
- * - Confirm / Reject buttons
- *
- * Listens to `ANALYSIS_UPDATE` messages from the background script
- * (sent when a new transaction is intercepted). On user decision, posts
- * `USER_DECISION` and closes the popup.
+ * Synta Popup Component
+ * Displays transaction analysis and allows user to approve/reject.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -31,16 +17,23 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
   const [txData, setTxData] = useState<DecodedTransaction | null>(transaction ?? null);
   const [riskData, setRiskData] = useState<RiskAssessment | null>(riskAssessment ?? null);
   const [isLoading, setIsLoading] = useState<boolean>(!transaction && !riskAssessment);
+  const [messageId, setMessageId] = useState<string | null>(null);
+  const [method, setMethod] = useState<string>('');
+  const [origin, setOrigin] = useState<string>('');
+
+  // Notify background that popup is ready
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'POPUP_READY' });
+  }, []);
 
   useEffect(() => {
-    const listener = (
-      msg: any,
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: any) => void
-    ) => {
+    const listener = (msg: any, _sender: chrome.runtime.MessageSender, sendResponse: any) => {
       if (msg.type === 'ANALYSIS_UPDATE') {
         setTxData(msg.transaction);
         setRiskData(msg.riskAssessment);
+        setMessageId(msg.messageId);
+        setMethod(msg.method || '');
+        setOrigin(msg.origin || '');
         setIsLoading(false);
         sendResponse({ received: true });
         return true;
@@ -55,31 +48,31 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
   const handleDecision = useCallback(
     (approved: boolean) => {
       onDecision?.(approved);
-      chrome.runtime.sendMessage({ type: 'USER_DECISION', approved });
+      if (messageId) {
+        chrome.runtime.sendMessage({
+          type: 'USER_DECISION',
+          messageId,
+          approved,
+        });
+      }
       window.close();
     },
-    [onDecision]
+    [onDecision, messageId]
   );
 
-  // ── Theme selection ──────────────────────────────────────────────
   const theme = RISK_COLORS[riskData?.level ?? 'neutral'];
 
   const getRiskPercentage = (level?: string): number => {
     switch (level) {
-      case 'danger':
-        return 90;
-      case 'warning':
-        return 65;
-      case 'safe':
-        return 30;
-      default:
-        return 50;
+      case 'danger': return 90;
+      case 'warning': return 65;
+      case 'safe': return 30;
+      default: return 50;
     }
   };
 
   const riskPercent = getRiskPercentage(riskData?.level);
 
-  // ── SVG progress ring helper ─────────────────────────────────────
   const renderRiskRing = () => {
     const size = 100;
     const strokeWidth = 8;
@@ -97,7 +90,6 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
 
     return (
       <svg width={size} height={size} viewBox="0 0 100 100" className="transform -rotate-90">
-        {/* Background track */}
         <circle
           cx="50"
           cy="50"
@@ -106,7 +98,6 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
           stroke="#334159"
           strokeWidth={strokeWidth}
         />
-        {/* Progress arc */}
         <circle
           cx="50"
           cy="50"
@@ -119,14 +110,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
           strokeLinecap="round"
           className="transition-all duration-700 ease-out"
         />
-        {/* Percentage label */}
-        <text
-          x="50"
-          y="50"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          className="text-xs font-bold fill-slate-200"
-        >
+        <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" className="text-xs font-bold fill-slate-200">
           {riskPercent}%
         </text>
       </svg>
@@ -135,12 +119,10 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
 
   return (
     <div className={`relative w-full h-full ${theme.bg} text-white overflow-hidden rounded-xl`}>
-      {/* Header with shield icon */}
+      {/* Header */}
       <div className="relative z-10 flex flex-col p-5 pb-3">
         <div className="flex items-center gap-3 mb-4">
-          <div
-            className={`w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center border ${theme.border}`}
-          >
+          <div className={`w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center border ${theme.border}`}>
             <ShieldIcon className="text-indigo-400 w-6 h-6" />
           </div>
           <div>
@@ -151,7 +133,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
           </div>
         </div>
 
-        {/* ── Loading state ── */}
+        {/* Loading State */}
         {isLoading && (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 py-8">
             <div className="relative">
@@ -163,17 +145,24 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
             <div className="text-center">
               <p className="text-lg font-medium">Analyzing transaction...</p>
               <p className="text-sm text-slate-400 mt-1">
-                Decoding smart contract interactions
-                <br />
+                Decoding smart contract interactions<br />
                 Checking against threat databases
               </p>
             </div>
           </div>
         )}
 
-        {/* ── Transaction content ── */}
+        {/* Transaction Content */}
         {!isLoading && txData && (
           <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 pb-4">
+            {/* Origin badge */}
+            {origin && (
+              <div className="mb-4 px-3 py-1 bg-slate-800/30 rounded-lg border border-slate-700">
+                <span className="text-xs text-slate-400">From:</span>
+                <span className="text-sm text-slate-300 ml-2 break-all">{origin}</span>
+              </div>
+            )}
+
             {/* Risk gauge */}
             <div className="mb-6 pb-4 border-b border-slate-700/50">
               <div className="flex justify-between items-center mb-3">
@@ -186,10 +175,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Progress ring */}
                 <div className="flex-shrink-0">{renderRiskRing()}</div>
-
-                {/* Risk reasons */}
                 <div className="flex-1">
                   {riskData?.reasons && riskData.reasons.length > 0 ? (
                     <ul className="space-y-1">
@@ -227,7 +213,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
               </div>
             </div>
 
-            {/* Address rows */}
+            {/* Addresses */}
             <div className="mb-5 space-y-3">
               {txData.spender && (
                 <AddressRow label="Spender" address={txData.spender} theme={theme} />
@@ -237,42 +223,19 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
               )}
             </div>
 
-            {/* Security concerns (only if riskData has them) */}
-            {riskData?.reasons && riskData.reasons.length > 0 && (
-              <div className="mb-5">
-                <h3 className={`text-sm font-medium ${theme.accent} mb-2`}>
-                  Security Concerns ({riskData.reasons.length})
-                </h3>
-                <ul className="space-y-2">
-                  {riskData.reasons.map((reason, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="text-red-400 mt-0.5">⚠</span>
-                      <span className="text-slate-300">{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Audit status & chain info */}
+            {/* Audit & chain info */}
             <div className="space-y-3 border-t border-slate-700/30 pt-3">
               {riskData?.auditStatus && (
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-slate-400">Smart Contract Audit</span>
-                  <span
-                    className={`font-medium ${
-                      riskData.auditStatus === 'audited'
-                        ? 'text-green-400'
-                        : riskData.auditStatus === 'not-audited'
-                        ? 'text-red-400'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {riskData.auditStatus === 'audited'
-                      ? 'Audited'
-                      : riskData.auditStatus === 'not-audited'
-                      ? 'Not Audited'
-                      : 'Unknown'}
+                  <span className={`font-medium ${
+                    riskData.auditStatus === 'audited' ? 'text-green-400' :
+                    riskData.auditStatus === 'not-audited' ? 'text-red-400' :
+                    'text-slate-400'
+                  }`}>
+                    {riskData.auditStatus === 'audited' ? 'Audited' :
+                     riskData.auditStatus === 'not-audited' ? 'Not Audited' :
+                     'Unknown'}
                   </span>
                 </div>
               )}
@@ -286,7 +249,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
           </div>
         )}
 
-        {/* ── Action buttons (always visible when not loading) ── */}
+        {/* Action Buttons */}
         {!isLoading && txData && (
           <div className="mt-4 pt-4 border-t border-slate-700/50">
             <div className="flex gap-3">
@@ -304,7 +267,7 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
                     : 'bg-gradient-to-r from-indigo-600/40 to-cyan-600/40 hover:from-indigo-600/60 hover:to-cyan-600/60 text-white border border-indigo-500/50'
                 }`}
               >
-                {riskData?.level === 'danger' ? '⚠ Confirm Risky Action' : 'Approve Safely'}
+                {riskData?.level === 'danger' ? 'Confirm Risky Action' : 'Approve Safely'}
               </button>
             </div>
           </div>
@@ -319,17 +282,10 @@ const Popup: React.FC<PopupProps> = ({ transaction, riskAssessment, onDecision }
   );
 };
 
-// ── SVG Icon Components ───────────────────────────────────────────
+// ─── SVG Icon Components ───────────────────────────────────────────
 
 const ShieldIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className={className}>
     <path
       d="M12 22C17.3075 22 22 17.3075 22 12C22 6.69251 17.3075 2 12 2C6.69251 2 2 6.69251 2 12C2 17.3075 6.69251 22 12 22Z"
       stroke="currentColor"
@@ -337,13 +293,7 @@ const ShieldIcon: React.FC<{ className?: string }> = ({ className }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <path
-      d="M9 12L11 14L15 10"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -384,9 +334,7 @@ const AddressRow: React.FC<{
   return (
     <div className="flex justify-between items-center">
       <div className="flex items-center gap-2">
-        <span
-          className={`w-2 h-2 rounded-full ${isContract ? 'bg-indigo-400' : 'bg-slate-500'}`}
-        />
+        <span className={`w-2 h-2 rounded-full ${isContract ? 'bg-indigo-400' : 'bg-slate-500'}`} />
         <span className="text-sm text-slate-400">{label}</span>
       </div>
       <span className="font-mono text-sm text-slate-300 break-all max-w-[200px]">
