@@ -4,9 +4,9 @@
   "description": "Intercepts Ethereum transactions and shows clear warnings before signing.",
   "version": "0.3.0",
   "icons": {
-    "16": "icons/synta-icon-16.svg",
-    "48": "icons/synta-icon-48.svg",
-    "128": "icons/synta-icon-128.svg"
+    "16": "icons/synta-icon-16.png",
+    "48": "icons/synta-icon-48.png",
+    "128": "icons/synta-icon-128.png"
   },
   "action": {
     "default_popup": "index.html",
