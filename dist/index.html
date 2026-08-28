@@ -1,9 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=480, initial-scale=1.0">
     <title>Synta - Transaction Safety</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        /* Base reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Full-bleed body */
+        html, body {
+            width: 100%;
+            height: 100%;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        /* Root container */
+        #root {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Prevent overscroll */
+        body {
+            overscroll-behavior-y: none;
+        }
+    </style>
   <script type="module" crossorigin src="./assets/popup.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/popup.css">
 </head>
 <body>
     <div id="root"></div>

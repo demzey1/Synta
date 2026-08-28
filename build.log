@@ -1,11 +1,17 @@
 [36mvite v8.2.2 [32mbuilding client environment for production...[36m[39m
 transforming...
-✓ 167 modules transformed.
+✓ 169 modules transformed.
 rendering chunks...
 computing gzip size...
-dist/index.html                 0.27 kB │ gzip:  0.21 kB
+dist/index.html                 0.94 kB │ gzip:  0.47 kB
+dist/assets/popup.css           4.51 kB │ gzip:  1.37 kB
 dist/assets/contentScript.js    1.32 kB │ gzip:  0.75 kB
 dist/assets/background.js      70.65 kB │ gzip: 22.48 kB
-dist/assets/popup.js          198.20 kB │ gzip: 62.28 kB
+dist/assets/popup.js          199.82 kB │ gzip: 62.75 kB
 
-[32m✓ built in 380ms[39m
+[32m✓ built in 3.42s[39m
+[33m[33m[PLUGIN_TIMINGS] [0mYour build spent 92% of 3.4s inside plugin hooks (3.1s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vite:build-html transform (61%, 2.1s, 1 call)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+[39m

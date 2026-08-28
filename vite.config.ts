@@ -7,6 +7,14 @@ export default defineConfig({
   root: '.',
   base: './',
   publicDir: 'public',
+  css: {
+    preprocessorOptions: {
+      css: {
+        // Ensure Tailwind styles are included
+        modules: false
+      }
+    }
+  },
   build: {
     rollupOptions: {
       input: {
