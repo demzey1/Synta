@@ -1,14 +1,14 @@
 /**
  * Synta Content Script
- * 
+ *
  * Intercepts Ethereum wallet API calls to provide security screening before
  * transactions are signed or sent. Runs on every webpage via manifest v3 host permissions.
- * 
+ *
  * Injection Points:
  * - window.ethereum (most wallets: MetaMask, Rabby, etc.)
  * - window.ethereum.request method wrapper
  * - Handles: eth_sendTransaction, personal_sign, eth_signTypedData_v4
- * 
+ *
  * Message Types:
  * - INTERCEPT_REQUEST: Sent from content script to background with payload details
  * - INTERCEPT_RESPONSE: Background sends approval/denial back to content script
@@ -39,7 +39,7 @@ interface InterceptResponse {
 const INTERCEPTED_METHODS = new Set([
   'eth_sendTransaction',
   'personal_sign',
-  'eth_signTypedData_v4',
+  'eth_signTypedData_v4'
 ]);
 
 /**
@@ -112,7 +112,7 @@ function setupEthereumInterception(): void {
         // Cast to match the expected return type shape for rejection
         // Ethereum providers typically throw provider errors
         (error as Record<string, unknown>).code = 4001; // User rejected error code
-        
+
         // Simulate provider rejection by throwing
         throw error;
       }
@@ -136,7 +136,7 @@ function setupEthereumInterception(): void {
   } catch (e) {
     // Fallback: direct assignment if defineProperty fails (e.g., frozen objects)
     console.warn('[Synta] Could not define property on ethereum, using direct assignment', e);
-    originalEthereum.request = wrappedRequest;
+    (originalEthereum as Record<string, unknown>).request = wrappedRequest;
   }
 
   console.log('[Synta] Ethereum request interception active');

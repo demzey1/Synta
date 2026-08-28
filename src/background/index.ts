@@ -12,16 +12,16 @@
  * Uses chrome.runtime.onMessage for cross-context communication
  */
 
-// ===========================================================================
+// ============================================================================
 // Imports
-// ===========================================================================
+// ============================================================================
 
 import { decodeTransaction, DecodedTransaction } from '../services/transactionDecoder';
 import { analyzeTransaction, RiskAssessment } from '../services/riskAnalyzer';
 
-// ===========================================================================
+// ============================================================================
 // Type Definitions
-// ===========================================================================
+// ============================================================================
 
 /**
  * Message from content script requesting security screening
@@ -61,7 +61,9 @@ interface UserDecisionMessage {
  */
 interface PopupUpdateMessage {
   type: 'ANALYSIS_UPDATE';
-  transaction: DecodedTransaction;
+  transaction: DecodedTransaction & {
+    risk?: RiskAssessment;
+  };
   riskAssessment: RiskAssessment;
   request: InterceptRequestMessage;
 }
@@ -88,9 +90,9 @@ type BackgroundMessage =
   | { type: 'PING' }
   | { type: 'POPUP_READY' };
 
-// ===========================================================================
+// ============================================================================
 // Pending Approval Store
-// ===========================================================================
+// ============================================================================
 
 /**
  * In-memory store of pending approvals
@@ -105,9 +107,9 @@ function generateRequestId(): string {
   return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// ===========================================================================
+// ============================================================================
 // Helper Functions
-// ===========================================================================
+// ============================================================================
 
 /**
  * Gets the currently active tab ID in the focused window
@@ -142,25 +144,33 @@ function sendMessageToTab(tabId: number, message: Record<string, unknown>): Prom
 async function notifyUI(approval: PendingApproval): Promise<void> {
   const updateMessage: PopupUpdateMessage = {
     type: 'ANALYSIS_UPDATE',
-    transaction: approval.decodedTx!,
+    transaction: {
+      ...approval.decodedTx!,
+      risk: approval.riskAssessment
+    },
     riskAssessment: approval.riskAssessment!,
     request: approval.request,
   };
 
   try {
-    // Try sending to popup window first
-    chrome.runtime.sendMessage(updateMessage).catch(() => {
-      // Popup not active - optionally fall back to notification
-      console.warn('[Synta] Popup not active, transaction queued');
+    // Send to all extension contexts (popup, if open)
+    await chrome.runtime.sendMessage(updateMessage);
+    console.log('[Synta] Analysis update sent to UI');
+  } catch (error) {
+    console.warn('[Synta] Failed to notify UI:', error);
+    // Fallback: show browser notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/synta-icon-48.png',
+      title: 'Synta - Action Required',
+      message: `New transaction requires your review\nAction: ${approval.decodedTx?.action || 'Unknown'}`,
     });
-  } catch (err) {
-    console.warn('[Synta] Failed to notify UI:', err);
   }
 }
 
-// ===========================================================================
+// ============================================================================
 // Core Message Handlers
-// ===========================================================================
+// ============================================================================
 
 /**
  * Handles a transaction interception request from the content script
@@ -187,7 +197,7 @@ async function handleInterceptRequest(
     // Step 1: Decode the transaction
     const decodedTx = decodeRequest(message);
 
-    // Step 2: Analyze risk
+    // Step 2: Analyze risk (await the async analysis)
     const riskAssessment = await analyzeTransaction(decodedTx);
 
     // Step 3: Store pending approval
@@ -290,9 +300,9 @@ async function handleUserDecision(message: UserDecisionMessage): Promise<void> {
   console.log('[Synta] User decision processed:', message.approved ? 'approved' : 'rejected');
 }
 
-// ===========================================================================
+// ============================================================================
 // Message Listener Setup
-// ===========================================================================
+// ============================================================================
 
 chrome.runtime.onMessage.addListener((
   message: BackgroundMessage,

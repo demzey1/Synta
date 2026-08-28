@@ -5,7 +5,7 @@ rendering chunks...
 computing gzip size...
 dist/index.html                 0.27 kB │ gzip:  0.21 kB
 dist/assets/contentScript.js    1.32 kB │ gzip:  0.75 kB
-dist/assets/background.js      70.44 kB │ gzip: 22.38 kB
-dist/assets/popup.js          197.47 kB │ gzip: 62.19 kB
+dist/assets/background.js      70.65 kB │ gzip: 22.48 kB
+dist/assets/popup.js          194.71 kB │ gzip: 61.34 kB
 
-[32m✓ built in 355ms[39m
+[32m✓ built in 346ms[39m
